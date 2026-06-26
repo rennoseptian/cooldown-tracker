@@ -1,0 +1,20 @@
+{
+  "name": "cooldown-tracker",
+  "version": "1.0.0",
+  "description": "Pelacak cooldown token Claude untuk banyak akun",
+  "private": true,
+  "scripts": {
+    "build:bridge": "esbuild src/notify-bridge.js --bundle --outfile=www/notify-bridge.js --format=iife --platform=browser",
+    "sync": "npm run build:bridge && npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/local-notifications": "^6.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/assets": "^3.0.5",
+    "esbuild": "^0.23.0"
+  }
+}

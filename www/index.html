@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cooldown — Claude Token Tracker</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#15161A">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="notify-bridge.js" defer onerror="window.__noBridge=true"></script>
+<style>
+  :root{
+    --bg:#15161A;
+    --surface:#1F2024;
+    --surface-2:#262730;
+    --border:#2C2D33;
+    --accent:#D97757;
+    --accent-dim:#3a2a22;
+    --success:#5FB89C;
+    --text:#ECEAE5;
+    --text-dim:#9A9CA5;
+    --text-faint:#6B6D78;
+    --radius:18px;
+    --radius-sm:12px;
+  }
+  [data-theme="light"]{
+    --bg:#F4F1EA;
+    --surface:#FFFFFF;
+    --surface-2:#EFEBE1;
+    --border:#E2DDD0;
+    --accent:#C2653F;
+    --accent-dim:#F1DCCB;
+    --success:#3F8E73;
+    --text:#21201C;
+    --text-dim:#6B665C;
+    --text-faint:#9B9586;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Sora',system-ui,sans-serif;
+    overscroll-behavior:none;
+    min-height:100vh;
+    transition:background .25s,color .25s;
+  }
+  .mono{font-family:'JetBrains Mono',monospace;}
+  .app{max-width:560px;margin:0 auto;padding:0 18px 110px;min-height:100vh;position:relative;}
+
+  /* header */
+  header.top{
+    display:flex;align-items:flex-end;justify-content:space-between;
+    padding:28px 2px 18px;
+  }
+  header.top .title{font-size:26px;font-weight:700;letter-spacing:-0.02em;}
+  header.top .subtitle{font-size:13px;color:var(--text-dim);margin-top:4px;font-weight:500;}
+  .icon-btn{
+    width:42px;height:42px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--surface);border:1px solid var(--border);
+    color:var(--text-dim);cursor:pointer;flex-shrink:0;
+    transition:background .15s,color .15s,transform .1s;
+  }
+  .icon-btn:active{transform:scale(0.92);}
+  .icon-btn:hover{color:var(--text);}
+
+  /* empty state */
+  .empty{
+    text-align:center;padding:70px 20px 40px;color:var(--text-dim);
+  }
+  .empty svg{opacity:.5;margin-bottom:14px;}
+  .empty h3{margin:0 0 6px;color:var(--text);font-size:17px;font-weight:600;}
+  .empty p{margin:0;font-size:13.5px;line-height:1.5;}
+
+  /* grid */
+  .grid{display:flex;flex-direction:column;gap:12px;}
+  .card{
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px;
+    display:flex;align-items:center;gap:16px;
+    position:relative;overflow:hidden;
+    transition:border-color .3s;
+  }
+  .card.is-ready{border-color:var(--success);}
+  .ring-wrap{position:relative;width:74px;height:74px;flex-shrink:0;}
+  .ring-wrap svg{transform:rotate(-90deg);}
+  .ring-bg{fill:none;stroke:var(--border);stroke-width:6;}
+  .ring-fg{fill:none;stroke-width:6;stroke-linecap:round;transition:stroke-dashoffset .4s linear,stroke .3s;}
+  .ring-center{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    flex-direction:column;
+  }
+  .ring-center .t{font-size:13px;font-weight:600;letter-spacing:-0.02em;}
+  .ring-center .badge-dot{
+    width:7px;height:7px;border-radius:50%;background:var(--success);
+    margin-top:2px;opacity:0;transition:opacity .3s;
+  }
+  .is-ready .ring-center .badge-dot{opacity:1;}
+
+  .card-body{flex:1;min-width:0;}
+  .card-body .label{font-size:15.5px;font-weight:600;margin:0 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .card-body .status{font-size:12.5px;color:var(--text-dim);display:flex;align-items:center;gap:6px;}
+  .card-body .status.ready{color:var(--success);font-weight:600;}
+  .card-body .notes{font-size:12px;color:var(--text-faint);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+  .card-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
+  .mini-btn{
+    width:34px;height:34px;border-radius:10px;border:1px solid var(--border);
+    background:var(--surface-2);color:var(--text-dim);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+    transition:transform .1s,color .15s;
+  }
+  .mini-btn:active{transform:scale(0.9);}
+  .mini-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+
+  /* fab */
+  .fab{
+    position:fixed;bottom:26px;right:50%;transform:translateX(280px);
+    width:58px;height:58px;border-radius:50%;
+    background:var(--accent);color:#fff;border:none;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 24px rgba(217,119,87,0.4);cursor:pointer;
+    transition:transform .15s;z-index:30;
+  }
+  .fab:active{transform:translateX(280px) scale(0.92);}
+  @media (max-width:620px){
+    .fab{right:24px;transform:none;}
+    .fab:active{transform:scale(0.92);}
+  }
+
+  /* sheet / modal */
+  .overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,0.55);
+    opacity:0;pointer-events:none;transition:opacity .25s;z-index:40;
+  }
+  .overlay.show{opacity:1;pointer-events:auto;}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;max-width:560px;margin:0 auto;
+    background:var(--surface);border-radius:22px 22px 0 0;
+    border:1px solid var(--border);border-bottom:none;
+    padding:10px 20px 28px;transform:translateY(100%);
+    transition:transform .3s cubic-bezier(.2,.8,.2,1);z-index:41;
+    max-height:88vh;overflow-y:auto;
+  }
+  .sheet.show{transform:translateY(0);}
+  .sheet .grabber{width:38px;height:4px;background:var(--border);border-radius:4px;margin:6px auto 18px;}
+  .sheet h2{font-size:18px;margin:0 0 18px;font-weight:700;}
+  .field{margin-bottom:16px;}
+  .field label{display:block;font-size:12.5px;color:var(--text-dim);font-weight:600;margin-bottom:7px;text-transform:uppercase;letter-spacing:.04em;}
+  .field input[type="text"],.field textarea{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:11px 13px;color:var(--text);
+    font-family:inherit;font-size:15px;outline:none;
+  }
+  .field input:focus,.field textarea:focus{border-color:var(--accent);}
+  .field textarea{resize:none;min-height:54px;}
+  .chip-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{
+    padding:9px 14px;border-radius:20px;background:var(--surface-2);
+    border:1px solid var(--border);font-size:13.5px;cursor:pointer;color:var(--text-dim);
+    font-weight:500;transition:all .15s;
+  }
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .duration-row{display:flex;gap:10px;}
+  .duration-row .field{flex:1;margin-bottom:0;}
+  .duration-row input[type="number"]{
+    width:100%;background:var(--surface-2);border:1px solid var(--border);
+    border-radius:var(--radius-sm);padding:11px 13px;color:var(--text);
+    font-family:'JetBrains Mono',monospace;font-size:15px;outline:none;
+  }
+  .duration-row input:focus{border-color:var(--accent);}
+  .color-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .swatch{
+    width:32px;height:32px;border-radius:50%;cursor:pointer;border:2px solid transparent;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .swatch.active{border-color:var(--text);}
+  .toggle-row{display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid var(--border);}
+  .toggle-row:last-child{border-bottom:none;}
+  .toggle-row .label-txt{font-size:14.5px;font-weight:500;}
+  .toggle-row .label-sub{font-size:12px;color:var(--text-dim);margin-top:2px;}
+  .switch{position:relative;width:46px;height:27px;border-radius:14px;background:var(--surface-2);border:1px solid var(--border);cursor:pointer;flex-shrink:0;transition:background .2s;}
+  .switch.on{background:var(--accent);border-color:var(--accent);}
+  .switch .knob{position:absolute;top:2px;left:2px;width:21px;height:21px;border-radius:50%;background:#fff;transition:transform .2s;}
+  .switch.on .knob{transform:translateX(19px);}
+  .btn-main{
+    width:100%;padding:15px;border-radius:var(--radius-sm);border:none;
+    background:var(--accent);color:#fff;font-size:15.5px;font-weight:600;
+    cursor:pointer;margin-top:6px;font-family:inherit;
+  }
+  .btn-main:active{opacity:.85;}
+  .btn-ghost{
+    width:100%;padding:13px;border-radius:var(--radius-sm);border:1px solid var(--border);
+    background:transparent;color:var(--text-dim);font-size:14px;font-weight:600;
+    cursor:pointer;margin-top:10px;font-family:inherit;
+  }
+  .preset-mini{font-size:12px;color:var(--text-faint);text-align:center;margin:10px 0 4px;}
+  .danger{color:#E0707A;}
+  .section-title{font-size:13px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em;margin:22px 0 10px;}
+  .section-title:first-child{margin-top:0;}
+  .preset-manage{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border);}
+  .preset-manage:last-of-type{border-bottom:none;}
+  .preset-manage span{font-size:14px;}
+  .preset-manage button{background:none;border:none;color:var(--text-faint);cursor:pointer;padding:4px;}
+  .toast{
+    position:fixed;bottom:100px;left:50%;transform:translateX(-50%) translateY(10px);
+    background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+    padding:11px 18px;border-radius:30px;font-size:13.5px;font-weight:500;
+    opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;z-index:50;
+    box-shadow:0 6px 20px rgba(0,0,0,0.3);
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div>
+      <div class="title">Cooldown</div>
+      <div class="subtitle" id="subtitle">0 akun dipantau</div>
+    </div>
+    <button class="icon-btn" id="settingsBtn" aria-label="Pengaturan">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </header>
+
+  <div id="emptyState" class="empty" style="display:none;">
+    <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+    <h3>Belum ada cooldown</h3>
+    <p>Tambahkan akun yang kena limit untuk<br>mulai memantau waktu cooldown-nya.</p>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<button class="fab" id="addBtn" aria-label="Tambah cooldown">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<div class="overlay" id="overlay"></div>
+
+<!-- Add/Edit sheet -->
+<div class="sheet" id="formSheet">
+  <div class="grabber"></div>
+  <h2 id="formTitle">Cooldown baru</h2>
+  <div class="field">
+    <label>Nama akun / label</label>
+    <input type="text" id="f_label" placeholder="cth. Akun Pro #2" maxlength="30">
+  </div>
+  <div class="field">
+    <label>Durasi cooldown</label>
+    <div class="chip-row" id="presetRow"></div>
+  </div>
+  <div class="field">
+    <label>Durasi kustom</label>
+    <div class="duration-row">
+      <div class="field"><input type="number" id="f_hours" min="0" max="999" placeholder="0" inputmode="numeric"></div>
+      <div class="field"><input type="number" id="f_minutes" min="0" max="59" placeholder="0" inputmode="numeric"></div>
+    </div>
+    <div class="preset-mini">jam &nbsp;&nbsp;·&nbsp;&nbsp; menit</div>
+    <div class="preset-mini" id="clockPreview" style="font-size:13.5px;color:var(--accent);font-weight:600;margin-top:8px;">⏰ Akan selesai —</div>
+  </div>
+  <div class="field">
+    <label>Warna tag</label>
+    <div class="color-row" id="colorRow"></div>
+  </div>
+  <div class="field">
+    <label>Catatan (opsional)</label>
+    <textarea id="f_notes" placeholder="cth. email akun, jenis limit, dll" maxlength="80"></textarea>
+  </div>
+  <button class="btn-main" id="saveBtn">Simpan cooldown</button>
+  <button class="btn-ghost danger" id="deleteBtn" style="display:none;">Hapus cooldown ini</button>
+</div>
+
+<!-- Settings sheet -->
+<div class="sheet" id="settingsSheet">
+  <div class="grabber"></div>
+  <h2>Pengaturan</h2>
+
+  <div class="section-title">Tampilan</div>
+  <div class="toggle-row">
+    <div>
+      <div class="label-txt">Mode terang</div>
+      <div class="label-sub">Ganti tema gelap/terang</div>
+    </div>
+    <div class="switch" id="themeSwitch"><div class="knob"></div></div>
+  </div>
+
+  <div class="section-title">Notifikasi</div>
+  <div class="toggle-row">
+    <div>
+      <div class="label-txt">Notifikasi saat siap</div>
+      <div class="label-sub" id="notifPermLabel">Kirim notifikasi HP saat cooldown selesai</div>
+    </div>
+    <div class="switch" id="notifSwitch"><div class="knob"></div></div>
+  </div>
+  <div class="toggle-row">
+    <div>
+      <div class="label-txt">Suara &amp; getar</div>
+      <div class="label-sub">Bunyikan nada singkat saat siap</div>
+    </div>
+    <div class="switch" id="soundSwitch"><div class="knob"></div></div>
+  </div>
+  <div class="toggle-row">
+    <div>
+      <div class="label-txt">Notifikasi berulang</div>
+      <div class="label-sub">Bunyi &amp; getar tiap 10 menit (3x) sampai dibuka — jaraknya sengaja dibuat &gt;9 menit karena Android membatasi alarm latar lebih rapat dari itu</div>
+    </div>
+    <div class="switch" id="repeatSwitch"><div class="knob"></div></div>
+  </div>
+
+  <div class="section-title">Preset durasi</div>
+  <div id="presetManageList"></div>
+  <div class="duration-row" style="margin-top:10px;">
+    <div class="field"><input type="text" id="np_name" placeholder="Nama preset"></div>
+    <div class="field" style="max-width:70px;"><input type="number" id="np_hours" placeholder="jam" min="0"></div>
+    <div class="field" style="max-width:70px;"><input type="number" id="np_minutes" placeholder="mnt" min="0" max="59"></div>
+  </div>
+  <button class="btn-ghost" id="addPresetBtn">+ Tambah preset</button>
+
+  <div class="section-title">Data</div>
+  <button class="btn-ghost" id="exportBtn">Ekspor data (.json)</button>
+  <button class="btn-ghost" id="importBtn">Impor data (.json)</button>
+  <input type="file" id="importFile" accept="application/json" style="display:none;">
+  <button class="btn-ghost danger" id="resetAllBtn">Hapus semua data</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+  const STORAGE_KEY = "cooldown_tracker_v1";
+  const COLORS = ["#D97757","#5FB89C","#6C9BD1","#A78BFA","#E0B85C","#E08FA0","#8FBF6B","#9A9CA5"];
+  const DEFAULT_PRESETS = [
+    {name:"5 jam", minutes:300},
+    {name:"8 jam", minutes:480},
+    {name:"24 jam", minutes:1440}
+  ];
+
+  let state = loadState();
+  let editingId = null;
+  let selectedColor = COLORS[0];
+  let selectedPresetMinutes = DEFAULT_PRESETS[0].minutes;
+
+  function loadState(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if(raw) return JSON.parse(raw);
+    }catch(e){}
+    return { accounts: [], settings: { theme:"dark", sound:true, notify:false, repeatNotify:true, presets: DEFAULT_PRESETS.slice() } };
+  }
+  function saveState(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+  function uid(){
+    return (crypto.randomUUID ? crypto.randomUUID() : 'id-'+Date.now()+'-'+Math.random().toString(16).slice(2));
+  }
+
+  // ---------- native (Capacitor) notification helpers ----------
+  // NOTE: Android throttles "allowWhileIdle" alarms to ONCE per 9 minutes, per app.
+  // Reminders closer together than that get silently dropped by the OS — so the
+  // interval here must stay comfortably above 9 minutes for repeats to actually fire.
+  const REPEAT_COUNT = 3;            // how many times to re-buzz if not acknowledged
+  const REPEAT_INTERVAL_MS = 10*60000; // 10 minutes apart (safely above the 9-min OS throttle)
+  const ID_SLOTS = 10;              // ids reserved per account (covers REPEAT_COUNT with headroom)
+
+  function hasNative(){
+    return !!(window.CooldownNotify && window.CooldownNotify.isNative());
+  }
+  function notifBaseId(id){
+    let hash = 0;
+    for(let i=0;i<id.length;i++){ hash = (hash*31 + id.charCodeAt(i)) | 0; }
+    return (Math.abs(hash) % 200000000) * ID_SLOTS;
+  }
+  async function scheduleNativeNotification(acc){
+    if(!hasNative()) return;
+    const baseId = notifBaseId(acc.id);
+    const allIds = Array.from({length: ID_SLOTS}, (_, i) => baseId + i);
+    await window.CooldownNotify.cancelMany(allIds);
+    if(!state.settings.notify) return;
+    const endTime = acc.startTime + acc.durationMinutes*60000;
+    if(endTime <= Date.now()) return;
+    const repeatCount = state.settings.repeatNotify ? REPEAT_COUNT : 1;
+    const items = [];
+    for(let i=0;i<repeatCount;i++){
+      items.push({
+        id: baseId + i,
+        title: i===0 ? 'Cooldown selesai' : 'Cooldown selesai — masih menunggu',
+        body: acc.label + ' sudah bisa dipakai lagi.' + (i>0 ? ' (pengingat '+(i+1)+')' : ''),
+        at: new Date(endTime + i*REPEAT_INTERVAL_MS)
+      });
+    }
+    try{ await window.CooldownNotify.scheduleMany(items); }
+    catch(e){ console.warn('Gagal jadwalkan notifikasi native', e); }
+  }
+  async function cancelNativeNotification(acc){
+    if(!hasNative()) return;
+    const baseId = notifBaseId(acc.id);
+    const allIds = Array.from({length: ID_SLOTS}, (_, i) => baseId + i);
+    try{ await window.CooldownNotify.cancelMany(allIds); }catch(e){}
+  }
+  async function rescheduleAllNativeNotifications(){
+    if(!hasNative() || !state.settings.notify) return;
+    for(const acc of state.accounts){ await scheduleNativeNotification(acc); }
+  }
+  async function cancelAllNativeNotifications(){
+    if(!hasNative()) return;
+    for(const acc of state.accounts){ await cancelNativeNotification(acc); }
+  }
+
+  // ---------- DOM refs ----------
+  const grid = document.getElementById('grid');
+  const emptyState = document.getElementById('emptyState');
+  const subtitle = document.getElementById('subtitle');
+  const overlay = document.getElementById('overlay');
+  const formSheet = document.getElementById('formSheet');
+  const settingsSheet = document.getElementById('settingsSheet');
+  const toastEl = document.getElementById('toast');
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(toastEl._t);
+    toastEl._t = setTimeout(()=>toastEl.classList.remove('show'), 2200);
+  }
+
+  function applyTheme(){
+    document.documentElement.setAttribute('data-theme', state.settings.theme === 'light' ? 'light' : 'dark');
+    document.getElementById('themeSwitch').classList.toggle('on', state.settings.theme === 'light');
+  }
+
+  function openSheet(el){ overlay.classList.add('show'); el.classList.add('show'); }
+  function closeSheets(){
+    overlay.classList.remove('show');
+    formSheet.classList.remove('show');
+    settingsSheet.classList.remove('show');
+  }
+  overlay.addEventListener('click', closeSheets);
+
+  // ---------- format helpers ----------
+  function fmtRemaining(ms){
+    if(ms <= 0) return "00:00";
+    const totalSec = Math.floor(ms/1000);
+    const h = Math.floor(totalSec/3600);
+    const m = Math.floor((totalSec%3600)/60);
+    const s = totalSec%60;
+    if(h > 0) return h+":"+String(m).padStart(2,'0')+":"+String(s).padStart(2,'0');
+    return String(m).padStart(2,'0')+":"+String(s).padStart(2,'0');
+  }
+  // Absolute local clock time the cooldown ends at — shown alarm-style, e.g. "Selesai 14:35"
+  function fmtClockTime(endTimeMs){
+    const end = new Date(endTimeMs);
+    const now = new Date();
+    const clock = end.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit'});
+    const sameDay = end.toDateString() === now.toDateString();
+    const tomorrow = new Date(now); tomorrow.setDate(now.getDate()+1);
+    const isTomorrow = end.toDateString() === tomorrow.toDateString();
+    if(sameDay) return clock;
+    if(isTomorrow) return clock+' besok';
+    return clock+' ('+end.toLocaleDateString('id-ID',{day:'numeric',month:'short'})+')';
+  }
+
+  // ---------- render ----------
+  const RING_R = 30;
+  const RING_C = 2*Math.PI*RING_R;
+
+  function render(){
+    grid.innerHTML = "";
+    const accs = state.accounts;
+    subtitle.textContent = accs.length === 0 ? "0 akun dipantau" : accs.length+" akun dipantau";
+    emptyState.style.display = accs.length === 0 ? "block" : "none";
+
+    const sorted = accs.slice().sort((a,b)=>{
+      const ra = a.startTime + a.durationMinutes*60000 - Date.now();
+      const rb = b.startTime + b.durationMinutes*60000 - Date.now();
+      return ra - rb;
+    });
+
+    sorted.forEach(acc=>{
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.dataset.id = acc.id;
+
+      const endTime = acc.startTime + acc.durationMinutes*60000;
+      const remaining = endTime - Date.now();
+      const ready = remaining <= 0;
+      if(ready) card.classList.add('is-ready');
+
+      const totalMs = acc.durationMinutes*60000;
+      const fracLeft = ready ? 0 : Math.max(0, Math.min(1, remaining/totalMs));
+      const offset = RING_C*(1-fracLeft);
+      const ringColor = ready ? 'var(--success)' : acc.color;
+
+      card.innerHTML = `
+        <div class="ring-wrap">
+          <svg width="74" height="74" viewBox="0 0 74 74">
+            <circle class="ring-bg" cx="37" cy="37" r="${RING_R}"/>
+            <circle class="ring-fg" cx="37" cy="37" r="${RING_R}" stroke="${ringColor}"
+              stroke-dasharray="${RING_C}" stroke-dashoffset="${offset}"/>
+          </svg>
+          <div class="ring-center">
+            <div class="t mono" data-role="timer">${ready ? 'SIAP' : fmtRemaining(remaining)}</div>
+            <div class="badge-dot"></div>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="label">${escapeHtml(acc.label)}</p>
+          <div class="status ${ready ? 'ready' : ''}" data-role="status">${ready ? 'Siap dipakai lagi' : 'Cooldown berjalan'}</div>
+          ${!ready ? `<div class="notes" data-role="clocktime">⏰ Selesai ${fmtClockTime(endTime)}</div>` : ''}
+          ${acc.notes ? `<div class="notes">${escapeHtml(acc.notes)}</div>` : ''}
+        </div>
+        <div class="card-actions">
+          ${ready
+            ? `<button class="mini-btn primary" data-act="restart" title="Mulai lagi">
+                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M21 12a9 9 0 1 1-2.6-6.4"/><path d="M21 4v6h-6"/></svg>
+               </button>`
+            : `<button class="mini-btn" data-act="edit" title="Edit">
+                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z"/></svg>
+               </button>`
+          }
+          <button class="mini-btn" data-act="delete" title="Hapus">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+          </button>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  function escapeHtml(s){
+    return (s||"").replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // ---------- tick (live update without full re-render for smoothness) ----------
+  setInterval(()=>{
+    let needsResort = false;
+    document.querySelectorAll('.card').forEach(card=>{
+      const acc = state.accounts.find(a=>a.id===card.dataset.id);
+      if(!acc) return;
+      const endTime = acc.startTime + acc.durationMinutes*60000;
+      const remaining = endTime - Date.now();
+      const ready = remaining <= 0;
+      const wasReady = card.classList.contains('is-ready');
+
+      if(ready && !wasReady){
+        needsResort = true;
+        onBecameReady(acc);
+      }
+      if(ready){
+        card.querySelector('[data-role="timer"]').textContent = 'SIAP';
+        card.querySelector('[data-role="status"]').textContent = 'Siap dipakai lagi';
+      } else {
+        card.querySelector('[data-role="timer"]').textContent = fmtRemaining(remaining);
+        const totalMs = acc.durationMinutes*60000;
+        const fracLeft = Math.max(0, Math.min(1, remaining/totalMs));
+        const offset = RING_C*(1-fracLeft);
+        card.querySelector('.ring-fg').setAttribute('stroke-dashoffset', offset);
+      }
+    });
+    if(needsResort) render();
+  }, 1000);
+
+  function onBecameReady(acc){
+    if(acc._notified) return;
+    acc._notified = true;
+    saveState();
+    if(!hasNative() && state.settings.notify && 'Notification' in window && Notification.permission === 'granted'){
+      try{
+        new Notification('Cooldown selesai', { body: acc.label+' sudah bisa dipakai lagi.', tag: acc.id });
+      }catch(e){}
+    }
+    if(state.settings.sound){
+      playBeep();
+      if(navigator.vibrate) navigator.vibrate([250,120,250,120,500]);
+    }
+    showToast(acc.label+' siap dipakai lagi ✓');
+  }
+
+  function playBeep(){
+    try{
+      const ctx = new (window.AudioContext||window.webkitAudioContext)();
+      const tone = (freq, startAt, dur) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = freq;
+        g.gain.value = 0.0001;
+        o.connect(g); g.connect(ctx.destination);
+        o.start(startAt);
+        g.gain.exponentialRampToValueAtTime(0.35, startAt+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, startAt+dur);
+        o.stop(startAt+dur+0.02);
+      };
+      const now = ctx.currentTime;
+      tone(880, now, 0.28);
+      tone(1175, now+0.32, 0.32);
+    }catch(e){}
+  }
+
+  // ---------- form sheet ----------
+  const addBtn = document.getElementById('addBtn');
+  const presetRow = document.getElementById('presetRow');
+  const colorRow = document.getElementById('colorRow');
+  const f_label = document.getElementById('f_label');
+  const f_hours = document.getElementById('f_hours');
+  const f_minutes = document.getElementById('f_minutes');
+  const f_notes = document.getElementById('f_notes');
+  const saveBtn = document.getElementById('saveBtn');
+  const deleteBtn = document.getElementById('deleteBtn');
+  const formTitle = document.getElementById('formTitle');
+  const clockPreview = document.getElementById('clockPreview');
+
+  function updateClockPreview(){
+    const h = parseInt(f_hours.value)||0;
+    const m = parseInt(f_minutes.value)||0;
+    const totalMin = h*60+m;
+    if(totalMin <= 0){ clockPreview.textContent = '⏰ Akan selesai —'; return; }
+    clockPreview.textContent = '⏰ Akan selesai ' + fmtClockTime(Date.now() + totalMin*60000);
+  }
+  f_hours.addEventListener('input', updateClockPreview);
+  f_minutes.addEventListener('input', updateClockPreview);
+
+  function buildPresetRow(){
+    presetRow.innerHTML = "";
+    state.settings.presets.forEach(p=>{
+      const chip = document.createElement('div');
+      chip.className = 'chip' + (p.minutes===selectedPresetMinutes ? ' active' : '');
+      chip.textContent = p.name;
+      chip.addEventListener('click', ()=>{
+        selectedPresetMinutes = p.minutes;
+        f_hours.value = Math.floor(p.minutes/60) || "";
+        f_minutes.value = p.minutes%60 || "";
+        buildPresetRow();
+        updateClockPreview();
+      });
+      presetRow.appendChild(chip);
+    });
+  }
+  function buildColorRow(){
+    colorRow.innerHTML = "";
+    COLORS.forEach(c=>{
+      const sw = document.createElement('div');
+      sw.className = 'swatch' + (c===selectedColor ? ' active' : '');
+      sw.style.background = c;
+      sw.addEventListener('click', ()=>{ selectedColor = c; buildColorRow(); });
+      colorRow.appendChild(sw);
+    });
+  }
+
+  function openAddForm(){
+    editingId = null;
+    formTitle.textContent = 'Cooldown baru';
+    f_label.value = '';
+    f_notes.value = '';
+    selectedColor = COLORS[state.accounts.length % COLORS.length];
+    selectedPresetMinutes = state.settings.presets[0] ? state.settings.presets[0].minutes : 300;
+    f_hours.value = Math.floor(selectedPresetMinutes/60) || "";
+    f_minutes.value = selectedPresetMinutes%60 || "";
+    deleteBtn.style.display = 'none';
+    buildPresetRow(); buildColorRow(); updateClockPreview();
+    openSheet(formSheet);
+  }
+  function openEditForm(acc){
+    editingId = acc.id;
+    formTitle.textContent = 'Edit cooldown';
+    f_label.value = acc.label;
+    f_notes.value = acc.notes || '';
+    selectedColor = acc.color;
+    selectedPresetMinutes = acc.durationMinutes;
+    f_hours.value = Math.floor(acc.durationMinutes/60) || "";
+    f_minutes.value = acc.durationMinutes%60 || "";
+    deleteBtn.style.display = 'block';
+    buildPresetRow(); buildColorRow(); updateClockPreview();
+    openSheet(formSheet);
+  }
+
+  addBtn.addEventListener('click', openAddForm);
+  document.getElementById('settingsBtn').addEventListener('click', ()=>{ buildPresetManageList(); openSheet(settingsSheet); });
+
+  saveBtn.addEventListener('click', ()=>{
+    const label = f_label.value.trim() || 'Akun tanpa nama';
+    let h = parseInt(f_hours.value)||0;
+    let m = parseInt(f_minutes.value)||0;
+    let totalMinutes = h*60+m;
+    if(totalMinutes <= 0) totalMinutes = 5; // minimum safeguard
+
+    let acc;
+    if(editingId){
+      acc = state.accounts.find(a=>a.id===editingId);
+      acc.label = label;
+      acc.color = selectedColor;
+      acc.notes = f_notes.value.trim();
+      acc.durationMinutes = totalMinutes;
+      acc._notified = false;
+    } else {
+      acc = {
+        id: uid(),
+        label, color: selectedColor,
+        notes: f_notes.value.trim(),
+        durationMinutes: totalMinutes,
+        startTime: Date.now(),
+        _notified: false
+      };
+      state.accounts.push(acc);
+    }
+    saveState();
+    render();
+    closeSheets();
+    showToast('Tersimpan ✓');
+    scheduleNativeNotification(acc);
+  });
+
+  deleteBtn.addEventListener('click', ()=>{
+    const acc = state.accounts.find(a=>a.id===editingId);
+    if(acc) cancelNativeNotification(acc);
+    state.accounts = state.accounts.filter(a=>a.id!==editingId);
+    saveState(); render(); closeSheets();
+    showToast('Cooldown dihapus');
+  });
+
+  grid.addEventListener('click', (e)=>{
+    const btn = e.target.closest('[data-act]');
+    if(!btn) return;
+    const card = e.target.closest('.card');
+    const acc = state.accounts.find(a=>a.id===card.dataset.id);
+    const act = btn.dataset.act;
+    if(act === 'edit') openEditForm(acc);
+    if(act === 'delete'){
+      cancelNativeNotification(acc);
+      state.accounts = state.accounts.filter(a=>a.id!==acc.id);
+      saveState(); render();
+      showToast('Cooldown dihapus');
+    }
+    if(act === 'restart'){
+      acc.startTime = Date.now();
+      acc._notified = false;
+      saveState(); render();
+      showToast(acc.label+' dimulai ulang');
+      scheduleNativeNotification(acc);
+    }
+  });
+
+  // ---------- settings sheet ----------
+  const themeSwitch = document.getElementById('themeSwitch');
+  const notifSwitch = document.getElementById('notifSwitch');
+  const soundSwitch = document.getElementById('soundSwitch');
+  const repeatSwitch = document.getElementById('repeatSwitch');
+
+  function syncSettingsUI(){
+    themeSwitch.classList.toggle('on', state.settings.theme==='light');
+    notifSwitch.classList.toggle('on', !!state.settings.notify);
+    soundSwitch.classList.toggle('on', !!state.settings.sound);
+    repeatSwitch.classList.toggle('on', state.settings.repeatNotify !== false);
+  }
+
+  themeSwitch.addEventListener('click', ()=>{
+    state.settings.theme = state.settings.theme === 'light' ? 'dark' : 'light';
+    saveState(); applyTheme(); syncSettingsUI();
+  });
+  soundSwitch.addEventListener('click', ()=>{
+    state.settings.sound = !state.settings.sound;
+    saveState(); syncSettingsUI();
+  });
+  repeatSwitch.addEventListener('click', ()=>{
+    state.settings.repeatNotify = !(state.settings.repeatNotify !== false);
+    saveState(); syncSettingsUI();
+    rescheduleAllNativeNotifications();
+  });
+  notifSwitch.addEventListener('click', async ()=>{
+    if(!state.settings.notify){
+      let granted = false;
+      if(hasNative()){
+        try{ granted = await window.CooldownNotify.requestPermission(); }catch(e){ granted = false; }
+      } else if('Notification' in window){
+        const perm = await Notification.requestPermission();
+        granted = perm === 'granted';
+      } else {
+        granted = true; // no notification API at all on this platform; allow toggle, sound/vibrate/toast still work
+      }
+      if(!granted){
+        showToast('Izin notifikasi ditolak HP/browser');
+        return;
+      }
+      state.settings.notify = true;
+      saveState(); syncSettingsUI();
+      rescheduleAllNativeNotifications();
+    } else {
+      state.settings.notify = false;
+      saveState(); syncSettingsUI();
+      cancelAllNativeNotifications();
+    }
+  });
+
+  function buildPresetManageList(){
+    const list = document.getElementById('presetManageList');
+    list.innerHTML = "";
+    state.settings.presets.forEach((p,i)=>{
+      const row = document.createElement('div');
+      row.className = 'preset-manage';
+      row.innerHTML = `<span>${escapeHtml(p.name)} <span class="mono" style="color:var(--text-faint)">(${p.minutes}m)</span></span>
+        <button data-i="${i}">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/></svg>
+        </button>`;
+      row.querySelector('button').addEventListener('click', ()=>{
+        state.settings.presets.splice(i,1);
+        saveState(); buildPresetManageList();
+      });
+      list.appendChild(row);
+    });
+  }
+  document.getElementById('addPresetBtn').addEventListener('click', ()=>{
+    const name = document.getElementById('np_name').value.trim();
+    const h = parseInt(document.getElementById('np_hours').value)||0;
+    const m = parseInt(document.getElementById('np_minutes').value)||0;
+    const minutes = h*60+m;
+    if(!name || minutes<=0){ showToast('Isi nama & durasi preset dulu'); return; }
+    state.settings.presets.push({name, minutes});
+    saveState();
+    document.getElementById('np_name').value='';
+    document.getElementById('np_hours').value='';
+    document.getElementById('np_minutes').value='';
+    buildPresetManageList();
+    showToast('Preset ditambahkan');
+  });
+
+  document.getElementById('exportBtn').addEventListener('click', ()=>{
+    const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'cooldown-backup.json'; a.click();
+    URL.revokeObjectURL(url);
+  });
+  document.getElementById('importBtn').addEventListener('click', ()=> document.getElementById('importFile').click());
+  document.getElementById('importFile').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = async ()=>{
+      try{
+        const data = JSON.parse(reader.result);
+        if(data && Array.isArray(data.accounts)){
+          await cancelAllNativeNotifications(); // clear alarms tied to the old data first
+          state = data;
+          if(!state.settings) state.settings = { theme:'dark', sound:true, notify:false, repeatNotify:true, presets: DEFAULT_PRESETS.slice() };
+          saveState(); applyTheme(); render(); syncSettingsUI();
+          showToast('Data berhasil diimpor');
+          rescheduleAllNativeNotifications();
+        } else { showToast('File tidak valid'); }
+      }catch(err){ showToast('Gagal membaca file'); }
+    };
+    reader.readAsText(file);
+  });
+  document.getElementById('resetAllBtn').addEventListener('click', async ()=>{
+    if(confirm('Hapus semua akun & pengaturan? Tindakan ini tidak bisa dibatalkan.')){
+      await cancelAllNativeNotifications();
+      state = { accounts: [], settings: { theme:'dark', sound:true, notify:false, repeatNotify:true, presets: DEFAULT_PRESETS.slice() } };
+      saveState(); applyTheme(); render(); syncSettingsUI();
+      showToast('Semua data dihapus');
+    }
+  });
+
+  // ---------- init ----------
+  applyTheme();
+  render();
+  syncSettingsUI();
+  if(hasNative() && window.CooldownNotify.ensureChannel){
+    window.CooldownNotify.ensureChannel();
+  }
+  rescheduleAllNativeNotifications(); // safety net: re-arm alarms in case OS cleared them
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>

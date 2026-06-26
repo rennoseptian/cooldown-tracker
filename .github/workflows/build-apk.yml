@@ -1,0 +1,67 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Use persistent debug keystore (so every build shares the same signature)
+        run: |
+          mkdir -p ~/.android
+          if [ -n "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.DEBUG_KEYSTORE_BASE64 }}" | base64 -d > ~/.android/debug.keystore
+            echo "Using custom persistent debug keystore from secret."
+          else
+            echo "::warning::DEBUG_KEYSTORE_BASE64 secret not set — Gradle will auto-generate a NEW debug keystore for this run, which will NOT match previously installed APKs (you'll need to uninstall the old app first)."
+          fi
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Add custom alarm sound resource
+        run: |
+          mkdir -p android/app/src/main/res/raw
+          cp native-resources/raw/cooldown_alarm.wav android/app/src/main/res/raw/cooldown_alarm.wav
+
+      - name: Generate Android app icons
+        run: npx @capacitor/assets generate --android
+
+      - name: Build native notification bridge
+        run: npm run build:bridge
+
+      - name: Sync web assets into Android project
+        run: npx cap sync android
+
+      - name: Make gradlew executable
+        run: chmod +x android/gradlew
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cooldown-tracker-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk

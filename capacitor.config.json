@@ -1,0 +1,9 @@
+{
+  "appId": "com.rennoseptian.cooldowntracker",
+  "appName": "Cooldown",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "android": {
+    "allowMixedContent": true
+  }
+}
